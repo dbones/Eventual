@@ -1,0 +1,437 @@
+﻿namespace Eventual
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Fox.Middleware;
+    using Microsoft.AspNetCore.Hosting;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Hosting;
+    using RabbitMQ.Client;
+    using RabbitMQ.Client.Events;
+    using RabbitMQ.Client.Framing;
+
+    public interface IPublisher
+    {
+        Task Publish<T>(T body, CancellationToken cancellationToken);
+        Task Publish<T>(Message<T> message, CancellationToken cancellationToken);
+    }
+
+    public class DefaultPublisher : IPublisher
+    {
+        private readonly IConnection _connection;
+
+        public DefaultPublisher(IConnection connection)
+        {
+            _connection = connection;
+        }
+
+        public Task Publish<T>(T body, CancellationToken cancellationToken)
+        {
+            var completeMessage = new Message<T>(body);
+            return Publish(completeMessage, cancellationToken);
+        }
+
+        public Task Publish<T>(Message<T> message, CancellationToken cancellationToken)
+        {
+            return _connection.Publish(message, cancellationToken);
+        }
+    }
+
+    public class BusHost : IHostedService
+    {
+        public BusHost(IServiceProvider serviceProvider)
+        {
+        }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+
+        }
+    }
+
+
+    public interface IDispatcher
+    {
+        Task ProcessMessage<T>(MessageReceivedContext<T> receivedContext, CancellationToken cancellationToken);
+        Task ProcessMessage<T>(MessagePublishContext<T> publishContext, CancellationToken cancellationToken);
+    }
+
+
+    public class ReceivedMessageMiddleware<T> : IMiddleware<MessageReceivedContext<T>>
+    {
+
+        private readonly Middleware<MessageReceivedContext<T>> _internalMiddleware;
+
+        public ReceivedMessageMiddleware()
+        {
+            _internalMiddleware = new Middleware<MessageReceivedContext<T>>();
+        }
+
+        public Task Execute(IServiceProvider scope, MessageReceivedContext<T> context)
+        {
+            using (var requestScope = scope.CreateScope())
+            {
+                return _internalMiddleware.Execute(requestScope.ServiceProvider, context);
+            }
+        }
+    }
+
+
+    public class ReadMessageFromQueueIntoContext<T> : IAction<MessageReceivedContext<T>>
+    {
+        private readonly ISerializer _serializer;
+
+        public ReadMessageFromQueueIntoContext(ISerializer serializer)
+        {
+            _serializer = serializer;
+        }
+
+        public async Task Execute(MessageReceivedContext<T> context, Next<MessageReceivedContext<T>> next)
+        {
+            var rbc = (RabbitMqMessageReceivedContext<T>)context;
+            var properties = rbc.Payload.BasicProperties;
+            var headers = properties.Headers.ToDictionary(key => key.Key, pair => pair.Value.ToString());
+
+            var content = Encoding.UTF8.GetString(rbc.Payload.Body);
+            var deserialized = _serializer.Deserialize<T>(content);
+
+            var msg = new Message<T>()
+            {
+                Metadata = headers,
+                Body = deserialized,
+                CorrelationId = properties.CorrelationId,
+                Id = properties.MessageId,
+                DateTime = ConvertFromUnixTimestamp(properties.Timestamp.UnixTime)
+            };
+
+            context.Message = msg;
+
+            await next(context);
+        }
+
+        static DateTime ConvertFromUnixTimestamp(long timestamp)
+        {
+            DateTime origin = new DateTime(1970, 1, 1, 0, 0, 0, 0);
+            return origin.AddSeconds(timestamp);
+        }
+    }
+
+    public class InvokeConsumer<T> : IAction<MessageReceivedContext<T>>
+    {
+        private readonly IServiceProvider _scope;
+
+        public InvokeConsumer(IServiceProvider scope)
+        {
+            _scope = scope;
+        }
+
+        public async Task Execute(MessageReceivedContext<T> context, Next<MessageReceivedContext<T>> next)
+        {
+            var consumer = _scope.GetService<IConsumer<T>>();
+            await consumer.Handle(context.Message, CancellationToken.None);
+            await next(context);
+        }
+    }
+
+
+    public interface ISerializer
+    {
+        T Deserialize<T>(string content);
+        string Serialize<T>(T content);
+    }
+
+    // .UseEventual<RabbitMqHost>
+    public static class WebHostExtensions
+    {
+        public static IWebHostBuilder UseEventual<T>(this IWebHostBuilder builder, Action<T> conf) where T: RabbitMqHost, new()
+        {
+            var config = new T();
+            conf(config);
+
+            
+
+            return builder;
+        }
+    }
+
+
+    public class RabbitMqHost
+    {
+        public RabbitMqHost()
+        {
+            Consumers = new List<ConsumerSetup>();
+        }
+
+        /// <summary>
+        /// message type / consumer type
+        /// </summary>
+        internal List<ConsumerSetup> Consumers { get; set; }
+
+        public void ConfigureConsumer(Type consumer, Action<ConsumerSetup> conf = null)
+        {
+            var consumerType = consumer.GetInterfaces()
+                .Where(x => x.IsGenericType)
+                .Select(x =>
+                new
+                {
+                    Definition = x.GetGenericTypeDefinition(),
+                    GenericArgs = x.GetGenericArguments(),
+                    Type = x
+                })
+                .Where(x=> x.GenericArgs.Length == 1)
+                .FirstOrDefault(x => x.Definition == typeof(IConsumer<>));
+
+            if(consumerType == null) throw new Exception($"is this a IConsumer<>, {consumer}");
+
+            var consumerSetup = new ConsumerSetup()
+            {
+                ConsumerType = consumer,
+                MessageType = consumerType.GenericArgs[0]
+            };
+
+            conf?.Invoke(consumerSetup);
+            ConfigureConsumer(consumerSetup);
+        }
+
+        public void ConfigureConsumer(ConsumerSetup setup)
+        {
+            Consumers.Add(setup);
+        }
+
+        public void ConfigureConsumer<TConsumer, TMessage>(Action<ConsumerSetup> conf = null)
+            where TConsumer : IConsumer<TMessage>
+            where TMessage : class
+        {
+            var consumerSetup = new ConsumerSetup()
+            {
+                ConsumerType = typeof(TConsumer),
+                MessageType = typeof(TMessage)
+            };
+
+            conf?.Invoke(consumerSetup);
+            Consumers.Add(consumerSetup);
+        }
+    }
+
+    public class ConsumerSetup
+    {
+        //public string DeadLetterQueueName { get; set; } = "";
+        public string QueueName { get; set; } = "";
+        public string Topic { get; set; } = "";
+        public Type MessageType { get; set; }
+        public Type ConsumerType { get; set; }
+    }
+
+
+    public abstract class MessagePublishContext<T>
+    {
+        public Message<T> Message { get; set; }
+    }
+
+    public class RabbitMqMessagePublishContext<T> : MessagePublishContext<T>
+    {
+        public byte[] Body { get; set; }
+        public BasicProperties Properties { get; set; }
+        public Action PublishAction { get; set; }
+    }
+
+    public abstract class MessageReceivedContext<T>
+    {
+        public Message<T> Message { get; set; }
+        public Action Acknowledge { get; set; }
+        public Action NotAcknowledge { get; set; }
+        public Action Reject { get; set; }
+    }
+
+    public class RabbitMqMessageReceivedContext<T> : MessageReceivedContext<T>
+    {
+        public BasicDeliverEventArgs Payload { get; set; }
+
+    }
+
+    public interface INamingStrategy
+    {
+        string GetQueueName(Type messageType, string serviceName);
+        string GetTopicName(Type messageType, string serviceName);
+    }
+
+    public class Message<T>
+    {
+        public Message(T body) : this()
+        {
+            Body = body;
+        }
+
+        public Message()
+        {
+            DateTime = DateTime.UtcNow;
+            Id = Guid.NewGuid().ToString("D");
+            CorrelationId = Id;
+            Metadata = new Dictionary<string, string>();
+        }
+
+        public DateTime DateTime { get; set; }
+        public string Id { get; set; }
+        public string CorrelationId { get; set; }
+
+        public IDictionary<string, string> Metadata { get; set; }
+
+        public T Body { get; set; }
+    }
+
+    public interface IConsumer<T> : IConsumer
+    {
+        Task Handle(Message<T> message, CancellationToken cancellationToken);
+    }
+
+    public interface IConsumer { }
+
+    public abstract class BusConfiguration
+    {
+        public string ServiceName { get; set; }
+    }
+
+    public class RabbitMqBusConfiguration : BusConfiguration
+    {
+        public string RoutingExchangeName { get; set; } = "routing.exchange";
+        public string DeadLetterExchangeName { get; set; } = "routing.deadletter";
+        public string DeadLetterQueueName { get; set; } = "deadletter.queue";
+
+        /// <summary>
+        /// "amqp://user:pass@hostName:port/vhost"
+        /// </summary>
+        public Uri ConnectionString { get; set; } = new Uri("amqp://localhost");
+    }
+
+    public interface IConnection
+    {
+        Task Publish<T>(Message<T> message, CancellationToken cancellationToken);
+        Task SetupConsumer<T>(CancellationToken cancellationToken);
+    }
+
+    public class RabbitMqConnection : IDisposable, IConnection
+    {
+        private readonly RabbitMqBusConfiguration _busConfiguration;
+        private readonly INamingStrategy _nameStrategy;
+        private readonly IDispatcher _dispatcher;
+        private readonly RabbitMQ.Client.IConnection _connection;
+        private readonly IModel _channel;
+
+        public RabbitMqConnection(
+            RabbitMqBusConfiguration busConfiguration,
+            INamingStrategy nameStrategy,
+            IDispatcher dispatcher)
+        {
+            _busConfiguration = busConfiguration;
+            _nameStrategy = nameStrategy;
+            _dispatcher = dispatcher;
+
+            //setup connection and channels
+            var factory = new ConnectionFactory
+            {
+                Uri = _busConfiguration.ConnectionString,
+                AutomaticRecoveryEnabled = true
+            };
+
+            _connection = factory.CreateConnection();
+            _channel = _connection.CreateModel();
+
+            //setup global exchange
+            _channel.ExchangeDeclare(_busConfiguration.RoutingExchangeName, "topic", true);
+
+            //setup dead-letter
+            _channel.ExchangeDeclare(_busConfiguration.DeadLetterExchangeName, "direct");
+            QueueDeclareOk queue = _channel.QueueDeclare(_busConfiguration.DeadLetterQueueName, true);
+            _channel.QueueBind(queue.QueueName, _busConfiguration.DeadLetterExchangeName, queue.QueueName);
+        }
+
+        public async Task Publish<T>(Message<T> message, CancellationToken cancellationToken)
+        {
+            var topic = EnsureExchange(typeof(T));
+
+            var properties = new BasicProperties
+            {
+                DeliveryMode = 2, //topic
+                AppId = _busConfiguration.ServiceName
+            };
+
+            var context = new RabbitMqMessagePublishContext<T>()
+            {
+                Message = message,
+                Properties = properties,
+            };
+            context.PublishAction = () => _channel.BasicPublish(_busConfiguration.RoutingExchangeName, topic, true, properties, context.Body);
+
+            await _dispatcher.ProcessMessage(context, cancellationToken);
+        }
+
+
+        public Task SetupConsumer<T>(CancellationToken cancellationToken)
+        {
+            var queue = EnsureQueue(typeof(T));
+            var consumer = new EventingBasicConsumer(_channel);
+
+            consumer.Received += (sender, args) =>
+            {
+                var context = new RabbitMqMessageReceivedContext<T>
+                {
+                    Payload = args,
+                    Acknowledge = () => _channel.BasicAck(args.DeliveryTag, false),
+                    NotAcknowledge = () => _channel.BasicNack(args.DeliveryTag, false, true),
+                    Reject = () => _channel.BasicReject(args.DeliveryTag, false)
+                };
+                var task = _dispatcher.ProcessMessage(context, cancellationToken);
+                task.Wait(cancellationToken);
+            };
+
+            _channel.BasicConsume(
+                queue: queue.QueueName,
+                autoAck: true,
+                consumer: consumer);
+
+
+
+            return Task.CompletedTask;
+        }
+
+
+
+        private string EnsureExchange(Type message)
+        {
+            var properties = new Dictionary<string, object>();
+            properties.Add("x-dead-letter-exchange", _busConfiguration.DeadLetterExchangeName);
+
+            var topicName = _nameStrategy.GetTopicName(message, _busConfiguration.ServiceName);
+            _channel.ExchangeDeclare(topicName, "fanout", true, false);
+            _channel.ExchangeBind(topicName, _busConfiguration.RoutingExchangeName, topicName, properties);
+
+            return topicName;
+        }
+
+        private QueueDeclareOk EnsureQueue(Type messageType)
+        {
+            var topicName = EnsureExchange(messageType);
+            var queueName = _nameStrategy.GetQueueName(messageType, _busConfiguration.ServiceName);
+
+            QueueDeclareOk queue = _channel.QueueDeclare(queueName, true);
+            _channel.QueueBind(queue.QueueName, topicName, topicName);
+
+            return queue;
+        }
+
+        public void Dispose()
+        {
+            _connection?.Dispose();
+            _channel?.Dispose();
+        }
+    }
+}
