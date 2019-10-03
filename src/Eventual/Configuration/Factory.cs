@@ -3,6 +3,7 @@
     using System;
     using System.Threading.Tasks;
     using Infrastructure;
+    using Infrastructure.Hosting;
     using Infrastructure.Serialization;
     using Microsoft.Extensions.DependencyInjection;
     using Middleware;

@@ -16,6 +16,9 @@
         private readonly RabbitMQ.Client.IConnection _connection;
         private readonly IModel _channel;
 
+        private ReaderWriterLockSlim _lockSlim = new ReaderWriterLockSlim();
+        private HashSet<string> _exchanges = new HashSet<string>();
+
         public RabbitMqConnection(RabbitMqBusConfiguration busConfiguration)
         {
             _busConfiguration = busConfiguration;
@@ -99,10 +102,29 @@
 
         private string EnsureExchange(string topicName)
         {
-            _channel.ExchangeDeclare(topicName, "fanout", true, false);
-            _channel.ExchangeBind(topicName, _busConfiguration.RoutingExchangeName, topicName);
+            try
+            {
+                _lockSlim.EnterReadLock();
+                if (_exchanges.Contains(topicName)) return topicName;
+            }
+            finally
+            {
+                _lockSlim.ExitReadLock();                
+            }
 
-            return topicName;
+            try
+            {
+                _lockSlim.EnterWriteLock();
+                _channel.ExchangeDeclare(topicName, "fanout", true, false);
+                _channel.ExchangeBind(topicName, _busConfiguration.RoutingExchangeName, topicName);
+                _exchanges.Add(topicName);
+                return topicName;
+            }
+            finally
+            {
+                _lockSlim.ExitWriteLock();
+            }
+            
         }
 
         private QueueDeclareOk EnsureQueue(string queueName, string topicName)

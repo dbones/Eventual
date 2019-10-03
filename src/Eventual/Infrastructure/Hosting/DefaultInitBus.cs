@@ -1,4 +1,4 @@
-﻿namespace Eventual.Configuration
+﻿namespace Eventual.Infrastructure.Hosting
 {
     using System;
     using System.Threading.Tasks;

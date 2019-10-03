@@ -5,7 +5,7 @@ this is a wip project to see how we can support the publish / subscribe pattern 
 The idea in a true SOA world all the services will communicate with messages, making the platform to become **Eventual**ly consistent.
 
 
-features
+**features**
 
 - multi-broker support WIP
 - full pub / sub implementation
@@ -43,7 +43,7 @@ public static void Main(string[] args)
 }
 ```
 
-# Publish
+## Publish
 
 ```
 private readonly IBus _bus;
@@ -67,7 +67,7 @@ public async Task Get()
 
 ```
 
-# Subscribe and consume
+## Subscribe and consume
 
 ```
 public class BookOrderedConsumer : IConsumer<BookOrdered>
@@ -87,3 +87,7 @@ public class BookOrderedConsumer : IConsumer<BookOrdered>
     }
 }
 ```
+
+**really awesome notes:**
+
+- https://derickbailey.com/2015/09/02/rabbitmq-best-practices-for-designing-exchanges-queues-and-bindings/
