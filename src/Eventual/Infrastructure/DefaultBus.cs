@@ -29,14 +29,14 @@
             return _subscriber.Subscribe<T>();
         }
 
-        public Task Publish<T>(T body, CancellationToken cancellationToken)
+        public Task Publish<T>(T body)
         {
-            return _publisher.Publish(body, cancellationToken);
+            return _publisher.Publish(body);
         }
 
-        public Task Publish<T>(Message<T> message, CancellationToken cancellationToken)
+        public Task Publish<T>(Message<T> message)
         {
-            return _publisher.Publish(message, cancellationToken);
+            return _publisher.Publish(message);
         }
     }
 }

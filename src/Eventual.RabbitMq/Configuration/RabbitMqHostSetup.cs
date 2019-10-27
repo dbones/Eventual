@@ -5,11 +5,11 @@
         public RabbitMqHostSetup() : base()
         {
             BusConfiguration = new RabbitMqBusConfiguration();
-            Factory = new RabbitMqHostFactory();
+            Factory = new RabbitMqTransportFactory();
         }
 
         public RabbitMqBusConfiguration BusConfiguration { get; set; }
-        public RabbitMqHostFactory Factory { get; set; }
+        public RabbitMqTransportFactory Factory { get; set; }
 
         protected override BusConfiguration GetConfiguration()
         {

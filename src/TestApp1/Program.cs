@@ -1,12 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-
 namespace TestApp1
 {
     using System.IO;
@@ -14,7 +5,9 @@ namespace TestApp1
     using Events;
     using Eventual;
     using Eventual.Configuration;
-    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.AspNetCore.Hosting;
+    using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.Hosting;
 
     public class Program
     {

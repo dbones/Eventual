@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-
-namespace TestApp1.Controllers
+﻿namespace TestApp1.Controllers
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading.Tasks;
+    using Microsoft.AspNetCore.Mvc;
+    using Microsoft.Extensions.Logging;
     using System.Threading;
     using Events;
     using Eventual;
@@ -32,7 +31,7 @@ namespace TestApp1.Controllers
         [HttpGet]
         public async Task<IEnumerable<WeatherForecast>> Get()
         {
-            await _bus.Publish(new BookOrdered {Author = "dave", Name = "events with eventual"}, CancellationToken.None);
+            await _bus.Publish(new BookOrdered {Author = "dave", Name = "events with eventual"});
 
 
 

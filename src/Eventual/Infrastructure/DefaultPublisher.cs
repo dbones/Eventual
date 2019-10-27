@@ -26,18 +26,18 @@
             _configuration = configuration;
         }
 
-        public Task Publish<T>(T body, CancellationToken cancellationToken)
+        public Task Publish<T>(T body)
         {
             var completeMessage = new Message<T>(body);
-            return Publish(completeMessage, cancellationToken);
+            return Publish(completeMessage);
         }
 
-        public Task Publish<T>(Message<T> message, CancellationToken cancellationToken)
+        public Task Publish<T>(Message<T> message)
         {
             var queueName = _namingStrategy.GetTopicName(typeof(T), _configuration.ServiceName);
-            var context = _connection.CreatePublishContext(queueName, message, cancellationToken);
+            var context = _connection.CreatePublishContext(queueName, message);
             
-            return _dispatcher.ProcessMessage(context, cancellationToken);
+            return _dispatcher.ProcessMessage(context);
         }
     }
 }

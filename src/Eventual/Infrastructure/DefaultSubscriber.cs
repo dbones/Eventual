@@ -69,8 +69,7 @@
             var consumerTask = _connection.RegisterConsumer<T>(
                 topicName,
                 queueName,
-                context => _dispatcher.ProcessMessage<T>(context, CancellationToken.None),
-                CancellationToken.None);
+                context => _dispatcher.ProcessMessage<T>(context));
 
             consumerTask.ContinueWith(task => { _subscriptions.Add(typeof(T), task.Result); });
             return consumerTask;

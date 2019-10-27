@@ -16,8 +16,8 @@
         private readonly RabbitMQ.Client.IConnection _connection;
         private readonly IModel _channel;
 
-        private ReaderWriterLockSlim _lockSlim = new ReaderWriterLockSlim();
-        private HashSet<string> _exchanges = new HashSet<string>();
+        private readonly ReaderWriterLockSlim _lockSlim = new ReaderWriterLockSlim();
+        private readonly HashSet<string> _exchanges = new HashSet<string>();
 
         public RabbitMqConnection(RabbitMqBusConfiguration busConfiguration)
         {
@@ -43,7 +43,7 @@
             _channel.QueueBind(queue.QueueName, _busConfiguration.DeadLetterExchangeName, queue.QueueName);
         }
 
-        public MessagePublishContext<T> CreatePublishContext<T>(string topicName, Message<T> message, CancellationToken cancellationToken)
+        public MessagePublishContext<T> CreatePublishContext<T>(string topicName, Message<T> message)
         {
             var topic = EnsureExchange(topicName);
 
@@ -69,7 +69,7 @@
         }
 
 
-        public Task<IDisposable> RegisterConsumer<TMessage>(string topicName, string queueName, Handle<TMessage> handle, CancellationToken cancellationToken) 
+        public Task<IDisposable> RegisterConsumer<TMessage>(string topicName, string queueName, Handle<TMessage> handle) 
         {
             var queue = EnsureQueue(queueName, topicName);
             var consumer = new EventingBasicConsumer(_channel);
@@ -85,7 +85,7 @@
                 };
 
                 var task = handle(context);
-                task.Wait(cancellationToken);
+                task.Wait();
             }
 
             consumer.Received += ReceivedEvent;
@@ -139,6 +139,8 @@
             var queue = _channel.QueueDeclare(
                 queue: queueName, 
                 durable: true, 
+                exclusive: false,
+                autoDelete: false,
                 arguments: properties);
 
             _channel.QueueBind(queue.QueueName, topicName, topicName);

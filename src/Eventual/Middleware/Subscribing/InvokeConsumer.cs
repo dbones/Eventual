@@ -18,7 +18,7 @@
         public async Task Execute(MessageReceivedContext<T> context, Next<MessageReceivedContext<T>> next)
         {
             var consumer = _scope.GetService<IConsumer<T>>();
-            await consumer.Handle(context.Message, CancellationToken.None);
+            await consumer.Handle(context.Message);
             await next(context);
         }
     }

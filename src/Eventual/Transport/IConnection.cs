@@ -22,9 +22,8 @@
         /// <typeparam name="T">the message type</typeparam>
         /// <param name="topicName">the topic name</param>
         /// <param name="message">the full message with headers</param>
-        /// <param name="cancellationToken"></param>
         /// <returns>context which can be passed into the publish pipeline</returns>
-        MessagePublishContext<T> CreatePublishContext<T>(string topicName, Message<T> message, CancellationToken cancellationToken);
+        MessagePublishContext<T> CreatePublishContext<T>(string topicName, Message<T> message);
         
         /// <summary>
         /// subscribes a consumer with the bus
@@ -33,8 +32,7 @@
         /// <param name="topicName">the topic</param>
         /// <param name="queueName">the queue which the consumer will process from</param>
         /// <param name="handle">the pipeline which will be called</param>
-        /// <param name="cancellationToken"></param>
         /// <returns>a disposable to allow the subscription to be cleared up</returns>
-        Task<IDisposable> RegisterConsumer<T>(string topicName, string queueName, Handle<T> handle, CancellationToken cancellationToken);
+        Task<IDisposable> RegisterConsumer<T>(string topicName, string queueName, Handle<T> handle);
     }
 }

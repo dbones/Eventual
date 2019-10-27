@@ -1,7 +1,5 @@
-﻿
-namespace TestApp1.Consumers
+﻿namespace TestApp1.Consumers
 {
-    using System.Threading;
     using System.Threading.Tasks;
     using Events;
     using Eventual;
@@ -16,7 +14,7 @@ namespace TestApp1.Consumers
             _logger = logger;
         }
 
-        public Task Handle(Message<BookOrdered> message, CancellationToken cancellationToken)
+        public Task Handle(Message<BookOrdered> message)
         {
             _logger.LogInformation($"wa hey someone ordered : {message.Body.Name}");
             return Task.CompletedTask;

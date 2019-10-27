@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Events
+﻿namespace Events
 {
     public class BookOrdered
     {

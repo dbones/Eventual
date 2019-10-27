@@ -8,7 +8,7 @@
     using Middleware.Subscribing;
     using Transport;
 
-    public class RabbitMqHostFactory : Factory
+    public class RabbitMqTransportFactory : Factory
     {
         public override void RegisterServices(
             IServiceCollection services,

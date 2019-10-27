@@ -12,11 +12,11 @@
 
     public abstract class Factory
     {
-    public virtual void RegisterServices(
-            IServiceCollection services, 
-            HostSetup setup,
-            Func<IServiceProvider, HostSetup> loadConfigurationIntoSetup,
-            Func<IServiceProvider, Task> startFunc) 
+        public virtual void RegisterServices(
+                IServiceCollection services,
+                HostSetup setup,
+                Func<IServiceProvider, HostSetup> loadConfigurationIntoSetup,
+                Func<IServiceProvider, Task> startFunc)
         {
 
             services.AddSingleton<IPublisher, DefaultPublisher>();
@@ -37,14 +37,14 @@
                 var consumerInterfaceType = typeof(IConsumer<>).MakeGenericType(consumer.MessageType);
                 services.AddTransient(consumerInterfaceType, consumer.ConsumerType);
             }
-            
+
 
             //middleware
             //publishing
             services.AddSingleton(typeof(MessagePublishContextMiddleware<>));
-            services.AddSingleton(svc=> svc.GetService<HostSetup>().PublishContextActions);
+            services.AddSingleton(svc => svc.GetService<HostSetup>().PublishContextActions);
             services.AddTransient(typeof(InvokePublish<>));
-    
+
             var pa = setup.PublishContextActions;
             pa.InvokePublisherAction = pa.InvokePublisherAction ?? typeof(InvokePublish<>);
 

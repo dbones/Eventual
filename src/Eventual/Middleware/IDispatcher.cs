@@ -10,8 +10,8 @@
 
     public interface IDispatcher
     {
-        Task ProcessMessage<T>(MessageReceivedContext<T> receivedContext, CancellationToken cancellationToken);
-        Task ProcessMessage<T>(MessagePublishContext<T> publishContext, CancellationToken cancellationToken);
+        Task ProcessMessage<T>(MessageReceivedContext<T> receivedContext);
+        Task ProcessMessage<T>(MessagePublishContext<T> publishContext);
     }
 
     public class DefaultDispatcher : IDispatcher
@@ -23,13 +23,13 @@
             _serviceProvider = serviceProvider;
         }
 
-        public Task ProcessMessage<T>(MessageReceivedContext<T> receivedContext, CancellationToken cancellationToken)
+        public Task ProcessMessage<T>(MessageReceivedContext<T> receivedContext)
         {
             var middleware = _serviceProvider.GetService<ReceivedMessageMiddleware<T>>();
             return middleware.Execute(_serviceProvider, receivedContext);
         }
 
-        public Task ProcessMessage<T>(MessagePublishContext<T> publishContext, CancellationToken cancellationToken)
+        public Task ProcessMessage<T>(MessagePublishContext<T> publishContext)
         {
             var middleware = _serviceProvider.GetService<MessagePublishContextMiddleware<T>>();
             return middleware.Execute(_serviceProvider, publishContext);

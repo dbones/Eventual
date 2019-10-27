@@ -21,7 +21,7 @@
             return JsonSerializer.Deserialize<T>(content, _options);
         }
 
-        public string Serialize<T>(T content)
+        public string Serialize(object content)
         {
             return JsonSerializer.Serialize(content, _options);
         }
