@@ -5,41 +5,84 @@
     using System.Threading;
     using System.Threading.Tasks;
     using Configuration;
+    using Microsoft.Extensions.Logging;
     using Middleware;
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
     using RabbitMQ.Client.Framing;
 
-    public class RabbitMqConnection : IDisposable, IConnection
+    public class RabbitMqConnection : IConnection
     {
+        private readonly ILogger<RabbitMqConnection> _logger;
         private readonly RabbitMqBusConfiguration _busConfiguration;
-        private readonly RabbitMQ.Client.IConnection _connection;
-        private readonly IModel _channel;
-
-        private readonly ReaderWriterLockSlim _lockSlim = new ReaderWriterLockSlim();
+        private RabbitMQ.Client.IConnection _connection;
+        private IModel _channel;
+        readonly ConnectionFactory _factory;
+        
+        private readonly ReaderWriterLockSlim _exchangeLock = new ReaderWriterLockSlim();
         private readonly HashSet<string> _exchanges = new HashSet<string>();
-
-        public RabbitMqConnection(RabbitMqBusConfiguration busConfiguration)
+        
+        public RabbitMqConnection(RabbitMqBusConfiguration busConfiguration, ILogger<RabbitMqConnection> logger)
         {
+            _logger = logger;
             _busConfiguration = busConfiguration;
 
-
             //setup connection and channels
-            var factory = new ConnectionFactory
+            _factory = new ConnectionFactory
             {
-                Uri = new Uri(_busConfiguration.ConnectionString),
-                AutomaticRecoveryEnabled = true
+                Uri = new Uri(busConfiguration.ConnectionString),
+                AutomaticRecoveryEnabled = true //wanted this to be explicit.
             };
 
-            _connection = factory.CreateConnection();
+            SetupGlobalExchanges();
+        }
+
+        private void SetupConnection()
+        {
+            if (_connection != null && _connection.IsOpen) return;
+
+            _connection?.Dispose();
+
+            _connection = _factory.CreateConnection();
+            _connection.ConnectionShutdown += _connection_ConnectionShutdown;
+            _connection.RecoverySucceeded += _connection_RecoverySucceeded;
+            _logger.LogInformation("Connection is ready");
+
+        }
+
+        private void _connection_RecoverySucceeded(object sender, EventArgs e)
+        {
+            _logger.LogInformation("Connection Recovered");
+        }
+
+        private void _connection_ConnectionShutdown(object sender, ShutdownEventArgs e)
+        {
+            _logger.LogWarning($"Lost connection:{Environment.NewLine}{e}");
+        }
+
+
+        private void SetupChannel()
+        {
+            if (_channel != null && _channel.IsOpen) return;
+
+            _channel?.Dispose();
+            SetupConnection();
+
             _channel = _connection.CreateModel();
+            _logger.LogInformation("Channel is ready");
+        }
+
+
+        private void SetupGlobalExchanges()
+        {
+            SetupChannel();
 
             //setup global exchange
-            _channel.ExchangeDeclare(_busConfiguration.RoutingExchangeName, "topic", true);
+            _channel.ExchangeDeclare(_busConfiguration.RoutingExchangeName, "topic", true, false);
 
             //setup dead-letter
             _channel.ExchangeDeclare(_busConfiguration.DeadLetterExchangeName, "direct");
-            QueueDeclareOk queue = _channel.QueueDeclare(_busConfiguration.DeadLetterQueueName, true);
+            QueueDeclareOk queue = _channel.QueueDeclare(_busConfiguration.DeadLetterQueueName, true, false, false);
             _channel.QueueBind(queue.QueueName, _busConfiguration.DeadLetterExchangeName, queue.QueueName);
         }
 
@@ -68,8 +111,7 @@
             return context;
         }
 
-
-        public Task<IDisposable> RegisterConsumer<TMessage>(string topicName, string queueName, Handle<TMessage> handle) 
+        public Task<IDisposable> RegisterConsumer<TMessage>(string topicName, string queueName, Handle<TMessage> handle)
         {
             var queue = EnsureQueue(queueName, topicName);
             var consumer = new EventingBasicConsumer(_channel);
@@ -79,8 +121,8 @@
                 var context = new RabbitMqMessageReceivedContext<TMessage>
                 {
                     Payload = args,
-                    Acknowledge = () => _channel.BasicAck(args.DeliveryTag, false),
-                    NotAcknowledge = () => _channel.BasicNack(args.DeliveryTag, false, true),
+                    Acknowledge = () => _channel.BasicAck(args.DeliveryTag, true),
+                    NotAcknowledge = () => _channel.BasicNack(args.DeliveryTag, true, true),
                     Reject = () => _channel.BasicReject(args.DeliveryTag, false)
                 };
 
@@ -92,29 +134,28 @@
 
             _channel.BasicConsume(
                 queue: queue.QueueName,
-                autoAck: true,
+                autoAck: false,
                 consumer: consumer);
 
             Action remove = () => consumer.Received -= ReceivedEvent;
-            return Task.FromResult((IDisposable)new RemoveReceivedEvent(remove));
+            return Task.FromResult((IDisposable)new RemoveReceivedEvent(remove, _logger));
         }
-
 
         private string EnsureExchange(string topicName)
         {
             try
             {
-                _lockSlim.EnterReadLock();
+                _exchangeLock.EnterReadLock();
                 if (_exchanges.Contains(topicName)) return topicName;
             }
             finally
             {
-                _lockSlim.ExitReadLock();                
+                _exchangeLock.ExitReadLock();
             }
 
             try
             {
-                _lockSlim.EnterWriteLock();
+                _exchangeLock.EnterWriteLock();
                 _channel.ExchangeDeclare(topicName, "fanout", true, false);
                 _channel.ExchangeBind(topicName, _busConfiguration.RoutingExchangeName, topicName);
                 _exchanges.Add(topicName);
@@ -122,9 +163,9 @@
             }
             finally
             {
-                _lockSlim.ExitWriteLock();
+                _exchangeLock.ExitWriteLock();
             }
-            
+
         }
 
         private QueueDeclareOk EnsureQueue(string queueName, string topicName)
@@ -137,8 +178,8 @@
             };
 
             var queue = _channel.QueueDeclare(
-                queue: queueName, 
-                durable: true, 
+                queue: queueName,
+                durable: true,
                 exclusive: false,
                 autoDelete: false,
                 arguments: properties);
@@ -154,4 +195,6 @@
             _channel?.Dispose();
         }
     }
+
+
 }

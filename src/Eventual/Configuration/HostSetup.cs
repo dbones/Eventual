@@ -56,18 +56,25 @@
             Consumers.Add(setup);
         }
 
+        public void ConfigureSubscription<T>(Action<ConsumerSetup> conf = null) where T: class
+        {
+            ConfigureSubscription(typeof(T), conf);
+        }
+
         public void ConfigureSubscription<TConsumer, TMessage>(Action<ConsumerSetup> conf = null)
             where TConsumer : IConsumer<TMessage>
             where TMessage : class
         {
-            var consumerSetup = new ConsumerSetup()
-            {
-                ConsumerType = typeof(TConsumer),
-                MessageType = typeof(TMessage)
-            };
+            ConfigureSubscription(typeof(TConsumer), conf);
 
-            conf?.Invoke(consumerSetup);
-            Consumers.Add(consumerSetup);
+            //var consumerSetup = new ConsumerSetup()
+            //{
+            //    ConsumerType = typeof(TConsumer),
+            //    MessageType = typeof(TMessage)
+            //};
+
+            //conf?.Invoke(consumerSetup);
+            //Consumers.Add(consumerSetup);
         }
 
 

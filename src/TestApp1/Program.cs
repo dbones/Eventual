@@ -2,7 +2,6 @@ namespace TestApp1
 {
     using System.IO;
     using Consumers;
-    using Events;
     using Eventual;
     using Eventual.Configuration;
     using Microsoft.AspNetCore.Hosting;
@@ -23,8 +22,8 @@ namespace TestApp1
                     setup.FromConfiguration("RabbitMq");
 
                     //setup.BusConfiguration.ServiceName = "TestApp1";
-                    setup.BusConfiguration.ConnectionString = "amqp://172.22.101.111/%2f";
-                    setup.ConfigureSubscription<BookOrderedConsumer, BookOrdered>();
+                    setup.BusConfiguration.ConnectionString = "amqp://localhost/%2f";
+                    setup.ConfigureSubscription<BookOrderedConsumer>();
 
                 })
                 .ConfigureWebHostDefaults(webBuilder =>

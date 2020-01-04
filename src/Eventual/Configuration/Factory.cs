@@ -1,6 +1,7 @@
 ﻿namespace Eventual.Configuration
 {
     using System;
+    using System.Linq;
     using System.Threading.Tasks;
     using Infrastructure;
     using Infrastructure.Hosting;
@@ -31,11 +32,24 @@
 
             services.AddSingleton(loadConfigurationIntoSetup);
 
+            //setup all the consumers
+            //confirm if there are any consumers which are already registered with the container.
+            var containerRegisteredConsumers = services
+                .Where(x => x.ServiceType.IsGenericType)
+                .Where(x => x.ServiceType.GetGenericTypeDefinition().IsAssignableFrom(typeof(IConsumer<>)))
+                .ToList();
 
+            //register manually setup consumers
             foreach (var consumer in setup.Consumers)
             {
                 var consumerInterfaceType = typeof(IConsumer<>).MakeGenericType(consumer.MessageType);
-                services.AddTransient(consumerInterfaceType, consumer.ConsumerType);
+                services.AddScoped(consumerInterfaceType, consumer.ConsumerType);
+            }
+
+            //ensure ioc registered consumers are known about in Eventual, as it will need to setup the subscriptions
+            foreach (var registeredController in containerRegisteredConsumers)
+            {
+                setup.ConfigureSubscription(registeredController.ImplementationType);
             }
 
 
