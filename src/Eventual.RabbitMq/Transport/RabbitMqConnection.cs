@@ -81,8 +81,8 @@
             _channel.ExchangeDeclare(_busConfiguration.RoutingExchangeName, "topic", true);
 
             //setup failed
-            _channel.ExchangeDeclare(_busConfiguration.FailedExchangeName, "fanout");
-            QueueDeclareOk failedQueue = _channel.QueueDeclare(_busConfiguration.FailedQueueName);
+            _channel.ExchangeDeclare(_busConfiguration.FailedExchangeName, "fanout", true);
+            QueueDeclareOk failedQueue = _channel.QueueDeclare(_busConfiguration.FailedQueueName, true, false);
             _channel.QueueBind(failedQueue.QueueName, _busConfiguration.FailedExchangeName, "");
             
             var failedConsumer = new EventingBasicConsumer(_channel);
@@ -91,7 +91,8 @@
             {
                 var countValue = args.BasicProperties.Headers["count"].ToString();
                 var newCount = int.Parse(countValue) + 1;
-                
+
+                //see if we have exhausted the retry queues
                 if (newCount > _busConfiguration.RetryBackOff.Count)
                 {
                     newCount = -1;
