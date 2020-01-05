@@ -1,5 +1,6 @@
 ﻿namespace TestApp1.Consumers
 {
+    using System;
     using System.Threading.Tasks;
     using Events;
     using Eventual;
@@ -17,7 +18,8 @@
         public Task Handle(Message<BookOrdered> message)
         {
             _logger.LogInformation($"wa hey someone ordered : {message.Body.Name}");
-            return Task.CompletedTask;
+            throw new Exception("meh");
+ //           return Task.CompletedTask;
         }
     }
 }

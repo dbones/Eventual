@@ -78,12 +78,85 @@
             SetupChannel();
 
             //setup global exchange
-            _channel.ExchangeDeclare(_busConfiguration.RoutingExchangeName, "topic", true, false);
+            _channel.ExchangeDeclare(_busConfiguration.RoutingExchangeName, "topic", true);
+
+            //setup failed
+            _channel.ExchangeDeclare(_busConfiguration.FailedExchangeName, "fanout");
+            QueueDeclareOk failedQueue = _channel.QueueDeclare(_busConfiguration.FailedQueueName);
+            _channel.QueueBind(failedQueue.QueueName, _busConfiguration.FailedExchangeName, "");
+            
+            var failedConsumer = new EventingBasicConsumer(_channel);
+
+            void FailedEvent(object sender, BasicDeliverEventArgs args)
+            {
+                var countValue = args.BasicProperties.Headers["count"].ToString();
+                var newCount = int.Parse(countValue) + 1;
+                
+                if (newCount > _busConfiguration.RetryBackOff.Count)
+                {
+                    newCount = -1;
+                }
+                _logger.LogInformation($"retrying message: {args.RoutingKey}, id: {args.BasicProperties.MessageId}, count: {newCount}");
+
+                args.BasicProperties.Headers["count"] = newCount; 
+                _channel.BasicPublish(_busConfiguration.DeadLetterExchangeName, args.RoutingKey, args.BasicProperties, args.Body);
+                
+                //remove it from the failed queue
+                _channel.BasicAck(args.DeliveryTag, true);
+            }
+
+            failedConsumer.Received += FailedEvent;
+
+            _channel.BasicConsume(
+                queue: _busConfiguration.FailedQueueName,
+                autoAck: false,
+                consumer: failedConsumer);
+
+            //Action remove = () => failedConsumer.Received -= ReceivedEvent;
+            //return Task.FromResult((IDisposable)new RemoveReceivedEvent(remove, _logger));
+
 
             //setup dead-letter
-            _channel.ExchangeDeclare(_busConfiguration.DeadLetterExchangeName, "direct");
-            QueueDeclareOk queue = _channel.QueueDeclare(_busConfiguration.DeadLetterQueueName, true, false, false);
-            _channel.QueueBind(queue.QueueName, _busConfiguration.DeadLetterExchangeName, queue.QueueName);
+            var deadLetterExchangeName = _busConfiguration.DeadLetterExchangeName;
+            _channel.ExchangeDeclare(deadLetterExchangeName, "headers", true);
+            QueueDeclareOk deadLetterQueue = _channel.QueueDeclare(_busConfiguration.DeadLetterQueueName, true, false, false);
+            _channel.QueueBind(deadLetterQueue.QueueName, deadLetterExchangeName, "", new Dictionary<string, object>()
+            {
+                { "x-match","any" },
+                { "count", -1 },
+                { "deadletter", "true" }
+            });
+
+            //setup retries (these will timeout to the retry dlx)
+            _channel.ExchangeDeclare(_busConfiguration.RetryExchangeName, "direct", true);
+            for (var index = 0; index < _busConfiguration.RetryBackOff.Count; index++)
+            {
+                var retryInMilliseconds = _busConfiguration.RetryBackOff[index];
+                var count = index + 1;
+                
+                var properties = new Dictionary<string, object>
+                {
+                    { "x-dead-letter-exchange", _busConfiguration.RetryExchangeName },
+                    { "x-message-ttl", retryInMilliseconds },
+                    { "count", count }
+                };
+
+                var retryQueue = _channel.QueueDeclare(
+                    queue: $"{_busConfiguration.RetryQueuePrefixName}{count}.{retryInMilliseconds}",
+                    durable: true,
+                    exclusive: false,
+                    arguments: properties);
+
+                _channel.QueueBind(
+                    retryQueue.QueueName,
+                    _busConfiguration.DeadLetterExchangeName, 
+                    "", 
+                    new Dictionary<string, object>()
+                    {
+                        { "x-match","all" },
+                        { "count", count }
+                    });
+            }
         }
 
         public MessagePublishContext<T> CreatePublishContext<T>(string topicName, Message<T> message)
@@ -93,8 +166,10 @@
             var properties = new BasicProperties
             {
                 DeliveryMode = 2, //topic
-                AppId = _busConfiguration.ServiceName
+                AppId = _busConfiguration.ServiceName,
+                Headers = new Dictionary<string, object>()
             };
+            properties.Headers.Add("count", 0);
 
             var context = new RabbitMqMessagePublishContext<T>()
             {
@@ -126,6 +201,7 @@
                     Reject = () => _channel.BasicReject(args.DeliveryTag, false)
                 };
 
+                
                 var task = handle(context);
                 task.Wait();
             }
@@ -174,7 +250,9 @@
 
             var properties = new Dictionary<string, object>
             {
-                { "x-dead-letter-exchange", _busConfiguration.DeadLetterExchangeName }
+                { "x-dead-letter-exchange", _busConfiguration.FailedExchangeName },
+                { "x-dead-letter-routing-key", queueName },
+                { "x-expires", _busConfiguration.ExpireQueueAfter }
             };
 
             var queue = _channel.QueueDeclare(
@@ -185,6 +263,7 @@
                 arguments: properties);
 
             _channel.QueueBind(queue.QueueName, topicName, topicName);
+            _channel.QueueBind(queue.QueueName, _busConfiguration.RetryExchangeName, queueName);
 
             return queue;
         }

@@ -15,7 +15,7 @@
             }
             catch (Exception)
             {
-                context.NotAcknowledge();
+                context.Reject();
                 throw;
             }
         }
