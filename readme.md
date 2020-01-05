@@ -91,3 +91,5 @@ public class BookOrderedConsumer : IConsumer<BookOrdered>
 **really awesome notes:**
 
 - https://derickbailey.com/2015/09/02/rabbitmq-best-practices-for-designing-exchanges-queues-and-bindings/
+- https://jack-vanlightly.com/blog/2017/12/5/rabbitmq-vs-kafka-part-2-rabbitmq-messaging-patterns-and-topologies
+- http://dbones.github.io/2020/01/retries-and-deadletters/
