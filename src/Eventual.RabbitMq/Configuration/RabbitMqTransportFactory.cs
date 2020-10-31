@@ -24,9 +24,11 @@
             //middleware
             services.AddTransient(typeof(ReadMessageFromQueueIntoContext<>));
             services.AddTransient(typeof(PrepareMessageContextForPublish<>));
+            services.AddTransient(typeof(RabbitMqMessageAck<>));
 
             setup.PublishContextActions.PrepareMessageContextForPublish = typeof(PrepareMessageContextForPublish<>);
             setup.ReceivedContextActions.ReadMessageFromQueueIntoContextAction = typeof(ReadMessageFromQueueIntoContext<>);
+            setup.ReceivedContextActions.DeadLetterAction = typeof(RabbitMqMessageAck<>);
         }
     }
 }

@@ -67,10 +67,10 @@
             services.AddSingleton(svc => svc.GetService<HostSetup>().ReceivedContextActions);
             services.AddTransient(typeof(InvokeConsumer<>));
             services.AddTransient(typeof(LogReceivedMessage<>));
-            services.AddTransient(typeof(MessageAck<>));
+            services.AddTransient(typeof(DefaultMessageAck<>));
 
             var ra = setup.ReceivedContextActions;
-            ra.DeadLetterAction = ra.DeadLetterAction ?? typeof(MessageAck<>);
+            ra.DeadLetterAction = ra.DeadLetterAction ?? typeof(DefaultMessageAck<>);
             ra.LoggingAction = ra.LoggingAction ?? typeof(LogReceivedMessage<>);
             ra.InvokeConsumerAction = ra.InvokeConsumerAction ?? typeof(InvokeConsumer<>);
 

@@ -4,7 +4,7 @@
     using System.Threading.Tasks;
     using Fox.Middleware;
 
-    public class MessageAck<T> : IConsumeAction<T>
+    public class DefaultMessageAck<T> : IConsumeAction<T>
     {
         public async Task Execute(MessageReceivedContext<T> context, Next<MessageReceivedContext<T>> next)
         {
@@ -15,7 +15,7 @@
             }
             catch (Exception)
             {
-                context.Reject();
+                context.NotAcknowledge();
                 throw;
             }
         }
