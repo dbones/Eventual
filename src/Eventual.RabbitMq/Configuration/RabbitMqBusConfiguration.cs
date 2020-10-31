@@ -11,7 +11,7 @@
         public string DeadLetterExchangeName { get; set; } = "routing.deadletter";
 
         public string FailedQueueName { get; set; } = "queue.failed";
-        public string RetryQueuePrefixName { get; set; } = "queue.retry.";
+        public string RetryQueuePrefixName { get; set; } = "queue.retry";
         public string DeadLetterQueueName { get; set; } = "queue.deadletter";
 
         public long ExpireQueueAfter { get; set; } = 3600000; //1 hour

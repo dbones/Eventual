@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
     using Configuration;
@@ -92,14 +93,19 @@
                 var countValue = args.BasicProperties.Headers["count"].ToString();
                 var newCount = int.Parse(countValue) + 1;
 
+                var key = $"retry.{newCount}.after";
+                
                 //see if we have exhausted the retry queues
-                if (newCount > _busConfiguration.RetryBackOff.Count)
+                if (!args.BasicProperties.Headers.TryGetValue(key, out var retryQueue))
                 {
                     newCount = -1;
+                    retryQueue = -1;
                 }
                 _logger.LogInformation($"retrying message: {args.RoutingKey}, id: {args.BasicProperties.MessageId}, count: {newCount}");
 
-                args.BasicProperties.Headers["count"] = newCount; 
+                args.BasicProperties.Headers["count"] = newCount;
+                args.BasicProperties.Headers["retry.in"] = retryQueue;
+
                 _channel.BasicPublish(_busConfiguration.DeadLetterExchangeName, args.RoutingKey, args.BasicProperties, args.Body);
                 
                 //remove it from the failed queue
@@ -125,6 +131,7 @@
             {
                 { "x-match","any" },
                 { "count", -1 },
+                { "retry.in", -1 },
                 { "deadletter", "true" }
             });
 
@@ -139,11 +146,11 @@
                 {
                     { "x-dead-letter-exchange", _busConfiguration.RetryExchangeName },
                     { "x-message-ttl", retryInMilliseconds },
-                    { "count", count }
+                    { "retry.in", retryInMilliseconds }
                 };
 
                 var retryQueue = _channel.QueueDeclare(
-                    queue: $"{_busConfiguration.RetryQueuePrefixName}{count}.{retryInMilliseconds}",
+                    queue: $"{_busConfiguration.RetryQueuePrefixName}.{retryInMilliseconds}",
                     durable: true,
                     exclusive: false,
                     arguments: properties);
@@ -155,7 +162,7 @@
                     new Dictionary<string, object>()
                     {
                         { "x-match","all" },
-                        { "count", count }
+                        { "retry.in", retryInMilliseconds }
                     });
             }
         }
@@ -164,15 +171,14 @@
         {
             var topic = EnsureExchange(topicName);
 
+            //create the shell of the properties here.
             var properties = new BasicProperties
             {
-                DeliveryMode = 2, //topic
-                AppId = _busConfiguration.ServiceName,
                 Headers = new Dictionary<string, object>()
             };
-            properties.Headers.Add("count", 0);
+            
 
-            var context = new RabbitMqMessagePublishContext<T>()
+            var context = new RabbitMqMessagePublishContext<T>
             {
                 Message = message,
                 Properties = properties,
