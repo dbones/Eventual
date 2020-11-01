@@ -12,14 +12,14 @@
     {
         public override void RegisterServices(
             IServiceCollection services,
-            HostSetup setup,
-            Func<IServiceProvider, HostSetup> loadConfigurationIntoSetup,
+            Setup setup,
+            Func<IServiceProvider, Setup> loadConfigurationIntoSetup,
             Func<IServiceProvider, Task> startFunc)
         {
             base.RegisterServices(services, setup, loadConfigurationIntoSetup, startFunc);
             services.AddSingleton<IConnection, RabbitMqConnection>();
             services.AddSingleton<INamingStrategy, RabbitMqNamingStrategy>();
-            services.AddSingleton(svc => ((RabbitMqHostSetup)setup).BusConfiguration);
+            services.AddSingleton(svc => ((RabbitMqBusConfiguration)Internals.GetConfiguration(setup)));
 
             //middleware
             services.AddTransient(typeof(ReadMessageFromQueueIntoContext<>));

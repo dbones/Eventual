@@ -1,8 +1,8 @@
 ﻿namespace Eventual.Configuration
 {
-    public class RabbitMqHostSetup : HostSetup
+    public class RabbitMq : TransportSetup
     {
-        public RabbitMqHostSetup() : base()
+        public RabbitMq()
         {
             BusConfiguration = new RabbitMqBusConfiguration();
             Factory = new RabbitMqTransportFactory();

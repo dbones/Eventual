@@ -8,23 +8,24 @@
 
     public class BusBuilder
     {
-        private Func<IServiceProvider, HostSetup> _setupConfiguration;
-        private HostSetup _setup;
+        private Func<IServiceProvider, Setup> _setupConfiguration;
+        private Setup _setup;
         private Factory _factory;
         private volatile bool _started = false;
 
-        public void Configure<T>(Action<T> conf) where T : HostSetup, new()
+        public void Configure(Action<Setup> conf)
         {
-            _setup = new T();
-            _factory = _setup.GetFactory();
+            _setup = new Setup();
+            conf(_setup);
+            _factory = _setup.Transport.GetFactory();
             
-            conf((T)_setup);
+            
 
             _setupConfiguration = sp =>
             {
-                if (string.IsNullOrWhiteSpace(_setup.ConfigurationEntryName)) return _setup;
+                if (string.IsNullOrWhiteSpace(_setup.Transport.ConfigurationEntryName)) return _setup;
                 var config = sp.GetService<IConfiguration>();
-                config.GetSection(_setup.ConfigurationEntryName).Bind(_setup.GetConfiguration());
+                config.GetSection(_setup.Transport.ConfigurationEntryName).Bind(_setup.Transport.GetConfiguration());
 
                 return _setup;
             }; 

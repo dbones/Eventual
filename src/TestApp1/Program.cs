@@ -17,14 +17,16 @@ namespace TestApp1
                 {
                     configBuilder.AddJsonFile(Path.Combine("config", "stagesettings.json"), true);
                 })
-                .UseEventual<RabbitMqHostSetup>((setup) =>
+                .ConfigureEventual(config =>
                 {
-                    setup.FromConfiguration("RabbitMq");
+                    config.UseTransport<RabbitMq>(setup =>
+                    {
+                        //setup.BusConfiguration.ServiceName = "TestApp1";
+                        //setup.BusConfiguration.ConnectionString = "amqp://localhost/%2f";
+                        setup.FromConfiguration("RabbitMq");
+                    });
 
-                    //setup.BusConfiguration.ServiceName = "TestApp1";
-                    setup.BusConfiguration.ConnectionString = "amqp://localhost/%2f";
-                    setup.ConfigureSubscription<BookOrderedConsumer>();
-
+                    config.Subscribe<BookOrderedConsumer>();
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {

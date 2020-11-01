@@ -9,10 +9,10 @@
         /// <summary>
         /// setup eventual
         /// </summary>
-        public static IHostBuilder UseEventual<T>(this IHostBuilder builder, Action<T> conf) where T : HostSetup, new()
+        public static IHostBuilder ConfigureEventual(this IHostBuilder builder, Action<Setup> setup) 
         {
             var busBuilder = new BusBuilder();
-            busBuilder.Configure(conf);
+            busBuilder.Configure(setup);
 
             builder.ConfigureServices((ctx, services) =>
             {
