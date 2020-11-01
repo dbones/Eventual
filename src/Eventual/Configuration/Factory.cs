@@ -15,8 +15,8 @@
     {
         public virtual void RegisterServices(
                 IServiceCollection services,
-                HostSetup setup,
-                Func<IServiceProvider, HostSetup> loadConfigurationIntoSetup,
+                Setup setup,
+                Func<IServiceProvider, Setup> loadConfigurationIntoSetup,
                 Func<IServiceProvider, Task> startFunc)
         {
 
@@ -26,7 +26,7 @@
             services.AddSingleton<ISerializer, DefaultSerializer>();
 
             services.AddSingleton<IDispatcher, DefaultDispatcher>();
-            services.AddSingleton(svc => svc.GetService<HostSetup>().GetConfiguration());
+            services.AddSingleton(svc => svc.GetService<Setup>().Transport.GetConfiguration());
             services.AddSingleton<IInitBus>(svc => new DefaultInitBus(svc, startFunc));
             services.AddHostedService<BusHostedService>();
 
@@ -49,14 +49,14 @@
             //ensure ioc registered consumers are known about in Eventual, as it will need to setup the subscriptions
             foreach (var registeredController in containerRegisteredConsumers)
             {
-                setup.ConfigureSubscription(registeredController.ImplementationType);
+                setup.Subscribe(registeredController.ImplementationType);
             }
 
 
             //middleware
             //publishing
             services.AddSingleton(typeof(MessagePublishContextMiddleware<>));
-            services.AddSingleton(svc => svc.GetService<HostSetup>().PublishContextActions);
+            services.AddSingleton(svc => svc.GetService<Setup>().PublishContextActions);
             services.AddTransient(typeof(InvokePublish<>));
 
             var pa = setup.PublishContextActions;
@@ -64,7 +64,7 @@
 
             //subscriptions
             services.AddSingleton(typeof(ReceivedMessageMiddleware<>));
-            services.AddSingleton(svc => svc.GetService<HostSetup>().ReceivedContextActions);
+            services.AddSingleton(svc => svc.GetService<Setup>().ReceivedContextActions);
             services.AddTransient(typeof(InvokeConsumer<>));
             services.AddTransient(typeof(LogReceivedMessage<>));
             services.AddTransient(typeof(DefaultMessageAck<>));
