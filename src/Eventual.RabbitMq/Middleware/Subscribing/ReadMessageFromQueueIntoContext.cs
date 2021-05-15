@@ -24,7 +24,7 @@
             var headers = properties?.Headers?.ToDictionary(key => key.Key, pair => pair.Value.ToString()) 
                           ?? new Dictionary<string, string>();
 
-            var content = Encoding.UTF8.GetString(rbc.Payload.Body);
+            var content = Encoding.UTF8.GetString(rbc.Payload.Body.ToArray());
             var deserialized = _serializer.Deserialize<T>(content);
 
             var msg = new Message<T>()

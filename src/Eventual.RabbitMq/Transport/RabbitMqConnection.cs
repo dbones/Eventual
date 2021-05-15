@@ -2,7 +2,6 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
     using Configuration;
@@ -10,7 +9,6 @@
     using Middleware;
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
-    using RabbitMQ.Client.Framing;
 
     public class RabbitMqConnection : IConnection
     {
@@ -46,7 +44,6 @@
 
             _connection = _factory.CreateConnection();
             _connection.ConnectionShutdown += _connection_ConnectionShutdown;
-            _connection.RecoverySucceeded += _connection_RecoverySucceeded;
             _logger.LogInformation("Connection is ready");
 
         }
@@ -172,11 +169,8 @@
             var topic = EnsureExchange(topicName);
 
             //create the shell of the properties here.
-            var properties = new BasicProperties
-            {
-                Headers = new Dictionary<string, object>()
-            };
-            
+            var properties = _channel.CreateBasicProperties();
+            properties.Headers = new Dictionary<string, object>();
 
             var context = new RabbitMqMessagePublishContext<T>
             {
