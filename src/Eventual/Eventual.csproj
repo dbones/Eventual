@@ -2,16 +2,31 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Eventual</RootNamespace>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Remove="Class1.bk" />
-  </ItemGroup>
+  <PropertyGroup>
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Eventual</PackageId>
+    <PackageTitle>Eventual</PackageTitle>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageTags>messageing topics</PackageTags>
+    <PackageLicenseUrl>http://opensource.org/licenses/Apache-2.0</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/dbones-labs/eventual</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/dbones-labs/eventual</RepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <IncludeSource>false</IncludeSource>
+  </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Fox.Middleware" Version="0.0.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="5.0.0" />
-    <!--<PackageReference Include="Microsoft.AspNetCore.Hosting.Abstractions" Version="2.2.0" />-->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="5.0.0" />
