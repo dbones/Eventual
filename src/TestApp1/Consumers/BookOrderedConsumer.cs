@@ -17,9 +17,10 @@
 
         public Task Handle(Message<BookOrdered> message)
         {
+            //throw new Exception();
             _logger.LogInformation($"wa hey someone ordered : {message.Body.Name}");
-            throw new Exception("meh");
- //           return Task.CompletedTask;
+            //throw new Exception("meh");
+            return Task.CompletedTask;
         }
     }
 }

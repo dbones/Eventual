@@ -2,6 +2,8 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
+    using System.Net.Http.Headers;
     using System.Threading;
     using System.Threading.Tasks;
     using Amazon.SimpleNotificationService;
@@ -13,7 +15,6 @@
     public class AwsConnection : IDisposable, IConnection
     {
         private readonly WorkerPool _workerPool;
-        private readonly PipelineBroker _pipelineBroker;
         readonly AmazonSQSClient _sqsClient;
         readonly AmazonSimpleNotificationServiceClient _snsClient;
 
@@ -22,11 +23,9 @@
         
 
         public AwsConnection(
-            WorkerPool workerPool,
-            PipelineBroker pipelineBroker)
+            WorkerPool workerPool)
         {
             _workerPool = workerPool;
-            _pipelineBroker = pipelineBroker;
             var sqsConfig = new AmazonSQSConfig();
 
             sqsConfig.ServiceURL = "http://sqs.us-west-2.amazonaws.com";
@@ -42,7 +41,7 @@
 
         public MessagePublishContext<T> CreatePublishContext<T>(string topicName, Message<T> message)
         {
-            var topicTask = EnsureExchange(topicName);
+            var topicTask = EnsureTopic(topicName);
             topicTask.Wait();
             var url = topicTask.Result;
 
@@ -62,53 +61,30 @@
 
         public async Task<IDisposable> RegisterConsumer<T>(string topicName, string queueName, Handle<T> handle)
         {
-            var queue = await this.EnsureQueue(queueName, topicName);
+            var queue = await EnsureQueue(queueName, topicName);
 
-            _pipelineBroker.AddRoute(topicName, o =>
-            {
-                var received = new AwsMessageReceivedContext<T> {Payload = (Message) o};
-                return handle(received);
-            });
 
-            void BackgroundPolling(CancellationToken token)
+            var subscription = new Subscription(_sqsClient, queue);
+
+            async Task ReceivedEvent(Message message)
             {
-                while (true)//(!cancellationToken.IsCancellationRequested)
+                var context = new AwsMessageReceivedContext<T>()
                 {
-                    var request = new ReceiveMessageRequest
-                    {
-                        AttributeNames = {"All"},
-                        MaxNumberOfMessages = 10,
-                        MessageAttributeNames = {"All"},
-                        QueueUrl = queue,
-                        WaitTimeSeconds = 20
-                    };
+                    Payload = message
+                };
 
-                    var responseTask = _sqsClient.ReceiveMessageAsync(request, token);
-                    responseTask.Wait(token);
-
-                    var tasks = new List<Task>();
-
-                    foreach (var message in responseTask.Result.Messages)
-                    {
-                        var topic = message.Attributes["topic"];
-                        var task = _pipelineBroker.Dispatch(topic, message);
-                        tasks.Add(task);
-                    }
-
-                    Task.WaitAll(tasks.ToArray());
-                    break;
-                }
+                await handle(context);
             }
 
-            var work = new Work(BackgroundPolling);
-            _workerPool.Schedule(work);
+            subscription.Handler = ReceivedEvent;
+
 
             //todo: fix this.
-            return Task.FromResult(work);
+            return Task.FromResult(subscription);
         }
 
 
-        private async Task<string> EnsureExchange(string topicName)
+        private async Task<string> EnsureTopic(string topicName)
         {
             try
             {
@@ -139,7 +115,7 @@
 
         private async Task<string> EnsureQueue(string queueName, string topicName)
         {
-            var arn = await EnsureExchange(topicName);
+            var arn = await EnsureTopic(topicName);
 
             var cqr = new CreateQueueRequest()
             {
@@ -155,4 +131,50 @@
 
 
     }
+
+
+
+    public class Subscription : IDisposable
+    {
+        private readonly AmazonSQSClient _client;
+        private readonly string _queueUrl;
+        private volatile bool _isDisposing = false;
+
+        public Subscription(AmazonSQSClient client, string queueUrl)
+        {
+            _client = client;
+            _queueUrl = queueUrl;
+        }
+
+        public Func<Message, Task> Handler { get; set; }
+
+        private async void BackgroundPolling(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested && !_isDisposing)
+            {
+                var request = new ReceiveMessageRequest
+                {
+                    AttributeNames = { "All" },
+                    MaxNumberOfMessages = 5,
+                    MessageAttributeNames = { "All" },
+                    QueueUrl = _queueUrl,
+                    WaitTimeSeconds = 20
+                };
+
+                var responseTask = await _client.ReceiveMessageAsync(request, token);
+
+                Task.WaitAll(
+                    responseTask
+                        .Messages
+                        .Select(message => Handler(message))
+                        .ToArray());
+            }
+        }
+
+        public void Dispose()
+        {
+            _isDisposing = true;
+        }
+    }
+
 }

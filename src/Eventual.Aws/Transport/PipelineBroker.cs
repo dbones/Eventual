@@ -4,6 +4,7 @@
     using System.Collections.Generic;
     using System.Threading.Tasks;
 
+    [Obsolete("user workerpool", true)]
     public class PipelineBroker
     {
         private readonly Dictionary<string, Func<object, Task>> _routes = new Dictionary<string, Func<object, Task>>();

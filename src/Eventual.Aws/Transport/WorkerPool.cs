@@ -1,26 +1,53 @@
 ﻿namespace Eventual.Transport
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Threading.Tasks;
+    using System.Threading.Tasks.Sources;
 
     public class WorkerPool : IDisposable
     {
-        private readonly List<Work> _workingProcesses = new List<Work>();
+        private readonly ConcurrentQueue<Work> _workItems = new ConcurrentQueue<Work>();
+        public volatile bool _isDisposing = false;
 
         public void Schedule(Work work)
         {
-            _workingProcesses.Add(work);
-            work.Start();
+            if (_isDisposing)
+            {
+                work.Dispose();
+                return;
+            }
+
+            _workItems.Enqueue(work);
+        }
+
+        public void Start()
+        {
+            var options = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = 10
+            };
+
+            Parallel.ForEach(_workItems, options, workItem =>
+            {
+                try
+                {
+                    workItem.Start();
+                }
+                catch (Exception e)
+                {
+                    workItem.Dispose();
+                }
+            });
         }
 
         public void Dispose()
         {
-            foreach (var work in _workingProcesses)
+            while (_workItems.TryDequeue(out var item))
             {
-                work.Dispose();
+                item.Dispose();
             }
-
-            _workingProcesses.Clear();
         }
     }
 }

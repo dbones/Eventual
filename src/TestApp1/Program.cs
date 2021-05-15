@@ -22,7 +22,7 @@ namespace TestApp1
                     config.UseTransport<RabbitMq>(setup =>
                     {
                         //setup.BusConfiguration.ServiceName = "TestApp1";
-                        //setup.BusConfiguration.ConnectionString = "amqp://localhost/%2f";
+                        setup.BusConfiguration.ConnectionString = "amqp://admin:admin@localhost/%2f";
                         setup.FromConfiguration("RabbitMq");
                     });
 
