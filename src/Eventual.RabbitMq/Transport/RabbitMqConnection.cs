@@ -22,7 +22,7 @@
         private readonly HashSet<string> _exchanges = new HashSet<string>();
         
         public RabbitMqConnection(RabbitMqBusConfiguration busConfiguration, ILogger<RabbitMqConnection> logger)
-        {
+         {
             _logger = logger;
             _busConfiguration = busConfiguration;
 

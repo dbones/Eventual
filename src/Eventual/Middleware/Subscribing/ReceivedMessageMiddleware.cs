@@ -37,7 +37,8 @@
         {
             using (var requestScope = scope.CreateScope())
             {
-                return _internalMiddleware.Execute(requestScope.ServiceProvider, context);
+                _internalMiddleware.Execute(requestScope.ServiceProvider, context).Wait();
+                return Task.CompletedTask;
             }
         }
     }

@@ -9,8 +9,12 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>0.0.1</Version>
+    <Version>0.0.3</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Class1.bk" />
+  </ItemGroup>
 
   <PropertyGroup>
     <PackageId>Eventual</PackageId>
